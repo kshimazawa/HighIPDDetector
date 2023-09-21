@@ -46,13 +46,9 @@ def detect(ipd_mat,prob=0.01,alpha=0.01,min_passes=10):
 def run_detect(ipd_mat_list,mat_count,zm_list):
     result_dict = {}
     with ProcessPoolExecutor() as executor:
-        for i in range(mat_count):
-            future = executor.submit(detect,ipd_mat = ipd_mat_list[i])
-            try:
-                result_dict[zm_list[i]]=future.result()
-            except:
-                print(result_dict)
-                exit(1)
+        result = list(executor.map(detect,ipd_mat_list))
+    for i in range(mat_count):
+        result_dict[zm_list[i]]=result[i]
     with open(RESULT_PATH,"a") as f:
         for k in result_dict:
             f.write("{}\t{}\n".format(k,result_dict[k]))
