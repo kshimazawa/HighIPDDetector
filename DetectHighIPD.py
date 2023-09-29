@@ -1,9 +1,10 @@
 import numpy as np
 import pysam
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor,ThreadPoolExecutor
 import os
-ALIGNED_FILE = "#.bam"
-RESULT_PATH = 'result.txt'
+from functools import partial
+ALIGNED_FILE = "/work/gg57/g57016/data/m64121_220824_041525.subreads.actc.subsample.forward.bam"
+RESULT_PATH = '/work/gg57/g57016/data/result_sub.txt'
 #detect consistently high IPD based on the binominal statistical testing
 def combination(n,k):
     if k < 0:
@@ -27,6 +28,7 @@ def detect(ipd_mat,prob=0.01,alpha=0.01,min_passes=10):
     rank_array = np.zeros(ipd_mat.shape)
     for j in range(rank_array.shape[0]):
         rank_array[j] = np.argsort(np.argsort(ipd_mat[j]))
+
     passes = rank_array.shape[0]
     for pos in range(rank_array.shape[1]):
         cnt = np.sum(rank_array[:,pos] > (rank_array.shape[1]*(1-prob)))
@@ -45,6 +47,7 @@ def detect(ipd_mat,prob=0.01,alpha=0.01,min_passes=10):
 
 def run_detect(ipd_mat_list,mat_count,zm_list):
     result_dict = {}
+    result = []
     with ProcessPoolExecutor() as executor:
         result = list(executor.map(detect,ipd_mat_list))
     for i in range(mat_count):
@@ -53,14 +56,29 @@ def run_detect(ipd_mat_list,mat_count,zm_list):
         for k in result_dict:
             f.write("{}\t{}\n".format(k,result_dict[k]))
     print("until zm{} done".format(zm_list[-1]))
-#make an ipd matrix                                                                                                                                                                          
+#make an ipd matrix                                             
+def list_to_mat(alignment,ipd,min_pos,max_pos):
+    return_mat = np.zeros(max_pos-min_pos+1)
+    for pos in range(alignment.shape[0]):
+            iter = alignment[pos,1]-min_pos
+            iter_query = alignment[pos,0]
+            return_mat[iter] = ipd[iter_query]
+    return return_mat
+
 def make_matrix(zm,align_result,ipd,min_pos,max_pos):
     ipd_matrix = np.zeros((len(align_result),max_pos-min_pos+1))
-    for p in range(len(align_result)):
-        for pos in range(align_result[p].shape[0]):
-            iter = align_result[p][pos,1]-min_pos
-            iter_query = align_result[p][pos,0]
-            ipd_matrix[p,iter] = ipd[p][iter_query]
+#    min_list = [min_pos for i in range(len(align_result))]
+#    max_list = [max_pos for i in range(len(align_result))]
+#    print(min_list)
+    partial_func = partial(list_to_mat,min_pos = min_pos, max_pos=max_pos)
+    with ThreadPoolExecutor() as executor:
+        ipd_matrix = np.fromiter(executor.map(partial_func,align_result,ipd),dtype=np.dtype((int,max_pos-min_pos+1)))
+#    print(ipd_matrix)
+#    for p in range(len(align_result)):
+#        for pos in range(align_result[p].shape[0]):
+#            iter = align_result[p][pos,1]-min_pos
+#            iter_query = align_result[p][pos,0]
+#            ipd_matrix[p,iter] = ipd[p][iter_query]
     return ipd_matrix
 #read a bam file and extract subreads with the same hole number                                                                                                                                             
 def align_by_read(ALIGNED_FILE):
@@ -78,7 +96,7 @@ def align_by_read(ALIGNED_FILE):
         if (prev_zm != zm) & (prev_zm != 0):
             ipd_mat_list.append(make_matrix(prev_zm,align_result,ipd,min_pos,max_pos))
             mat_count += 1
-            zm_list.append(zm)
+            zm_list.append(prev_zm)
             if mat_count >= 100:
                 run_detect(ipd_mat_list,mat_count,zm_list)
                 ipd_mat_list = []
@@ -106,5 +124,4 @@ def align_by_read(ALIGNED_FILE):
     bamfile.close()
     return
 
-if __name__=='__main__':
-    align_by_read(ALIGNED_FILE)
+align_by_read(ALIGNED_FILE)
