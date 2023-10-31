@@ -36,3 +36,5 @@ def align_by_read(ALIGNED_FILE,FOLDER_PATH):
     np.savetxt("{}/zm{}_ipdmatrix.txt".format(FOLDER_PATH,zm),ipd_matrix,fmt='%d')
     bamfile.close()
         
+if __name__ == "__main__":
+    ALIGNED_FILE = ""
