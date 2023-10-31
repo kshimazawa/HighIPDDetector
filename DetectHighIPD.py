@@ -5,6 +5,8 @@ import os
 from functools import partial
 ALIGNED_FILE = "/work/gg57/g57016/data/m64121_220824_041525.subreads.actc.subsample.forward.bam"
 RESULT_PATH = '/work/gg57/g57016/data/result_sub.txt'
+MAX_READ_LEN = 100000
+MAX_PASS = 1000
 #detect consistently high IPD based on the binominal statistical testing
 def combination(n,k):
     if k < 0:
@@ -56,45 +58,23 @@ def run_detect(ipd_mat_list,mat_count,zm_list):
         for k in result_dict:
             f.write("{}\t{}\n".format(k,result_dict[k]))
     print("until zm{} done".format(zm_list[-1]))
-#make an ipd matrix                                             
-def list_to_mat(alignment,ipd,min_pos,max_pos):
-    return_mat = np.zeros(max_pos-min_pos+1)
-    for pos in range(alignment.shape[0]):
-            iter = alignment[pos,1]-min_pos
-            iter_query = alignment[pos,0]
-            return_mat[iter] = ipd[iter_query]
-    return return_mat
 
-def make_matrix(zm,align_result,ipd,min_pos,max_pos):
-    ipd_matrix = np.zeros((len(align_result),max_pos-min_pos+1))
-#    min_list = [min_pos for i in range(len(align_result))]
-#    max_list = [max_pos for i in range(len(align_result))]
-#    print(min_list)
-    partial_func = partial(list_to_mat,min_pos = min_pos, max_pos=max_pos)
-    with ThreadPoolExecutor() as executor:
-        ipd_matrix = np.fromiter(executor.map(partial_func,align_result,ipd),dtype=np.dtype((int,max_pos-min_pos+1)))
-#    print(ipd_matrix)
-#    for p in range(len(align_result)):
-#        for pos in range(align_result[p].shape[0]):
-#            iter = align_result[p][pos,1]-min_pos
-#            iter_query = align_result[p][pos,0]
-#            ipd_matrix[p,iter] = ipd[p][iter_query]
-    return ipd_matrix
-#read a bam file and extract subreads with the same hole number                                                                                                                                             
-def align_by_read(ALIGNED_FILE):
-    bamfile = pysam.AlignmentFile(ALIGNED_FILE,'rb',check_sq=False)    
+def align_by_read(ALIGNED_FILE,FOLDER_PATH=""):
+    bamfile = pysam.AlignmentFile(ALIGNED_FILE,'rb',check_sq=False)
     prev_zm = 0
-    align_result = []#shape:(pass,matched_bases,2)                                                                                                                                                         
-    ipd = []#shape:(pass,subread_length)                                                                                                                                                                   
     min_pos = 0
     max_pos = 0
     ipd_mat_list = []
     zm_list = [] 
     mat_count = 0
+    ipd_matrix = np.zeros((MAX_PASS,MAX_READ_LEN))
+    pass_count = 0
     for read in bamfile.fetch(until_eof=True):
         zm = int(read.get_tag('zm'))
         if (prev_zm != zm) & (prev_zm != 0):
-            ipd_mat_list.append(make_matrix(prev_zm,align_result,ipd,min_pos,max_pos))
+            if FOLDER_PATH != "":
+                np.savetxt("{}/zm{}_ipdmatrix.txt".format(FOLDER_PATH,zm),ipd_matrix[:pass_count,:max_pos+1],fmt='%d')
+            ipd_mat_list.append(ipd_matrix[:pass_count,:max_pos+1].copy())
             mat_count += 1
             zm_list.append(prev_zm)
             if mat_count >= 100:
@@ -102,12 +82,18 @@ def align_by_read(ALIGNED_FILE):
                 ipd_mat_list = []
                 mat_count = 0
                 zm_list = []
-            align_result = []
-            ipd = []
+            ipd_matrix = np.zeros((MAX_PASS,MAX_READ_LEN))
             min_pos = 0
             max_pos = 0
+            pass_count = 0
         prev_zm = zm
-        aligned_pairs = np.array(read.get_aligned_pairs(matches_only=True))#list of tuples whose elements are (read_pos, ref_pos) for matched bases                                                         
+        aligned_pairs = np.array(read.get_aligned_pairs(matches_only=True),dtype=int)#list of tuples whose elements are (read_pos, ref_pos) for matched bases
+        raw_ipd = np.array(read.get_tag('ip'),dtype=int)
+        for i in range(len(aligned_pairs)):
+            read_pos = aligned_pairs[i,0]
+            ref_pos = aligned_pairs[i,1]
+            ipd_matrix[pass_count,ref_pos] = raw_ipd[read_pos]
+        pass_count += 1
         min_pos_subread = np.min(aligned_pairs[:,1])
         max_pos_subread = np.max(aligned_pairs[:,1])
         if min_pos > min_pos_subread:
@@ -115,13 +101,14 @@ def align_by_read(ALIGNED_FILE):
         if max_pos < max_pos_subread:
             max_pos = max_pos_subread
         max_pos_subread = np.max(aligned_pairs[:,1])
-        align_result.append(aligned_pairs)
-        ipd.append(read.get_tag('ip'))
-    ipd_mat_list.append(make_matrix(prev_zm,align_result,ipd,min_pos,max_pos))
+    if FOLDER_PATH != "":
+        np.savetxt("{}/zm{}_ipdmatrix.txt".format(FOLDER_PATH,zm),ipd_matrix,fmt='%d')
+    ipd_mat_list.append(ipd_matrix[:pass_count,:max_pos+1].copy())
     mat_count += 1
     zm_list.append(prev_zm)
     run_detect(ipd_mat_list,mat_count,zm_list)
     bamfile.close()
     return
 
-align_by_read(ALIGNED_FILE)
+if __name__ == "__main__":
+    align_by_read(ALIGNED_FILE)
