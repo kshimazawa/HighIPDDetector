@@ -6,10 +6,10 @@ def split_strands(ALIGNED_FILE,NEW_FILE):
     forward_bamfile = pysam.AlignmentFile("{}.forward.bam".format(NEW_FILE),'wb',template=bamfile)
     reverse_bamfile = pysam.AlignmentFile("{}.reverse.bam".format(NEW_FILE),'wb',template=bamfile)
     for read in bamfile.fetch(until_eof=True):
-        if read.flag == 0:
-            forward_bamfile.write(read)
-        else:
+        if read.is_reverse:
             reverse_bamfile.write(read)
+        else:
+            forward_bamfile.write(read)
     forward_bamfile.close()
     reverse_bamfile.close()
     bamfile.close()

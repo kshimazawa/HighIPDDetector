@@ -57,7 +57,7 @@ class DetectHighIPD:
         with open(self.RESULT_PATH,"a") as f:
             for k in result_dict:
                 f.write("{}\t{}\n".format(k,result_dict[k]))
-                print("until zm{} done".format(zm_list[-1]))
+        print("until zm{} done".format(zm_list[-1]))
 
     def align_by_read(self,FOLDER_PATH=""):
         bamfile = pysam.AlignmentFile(self.ALIGNED_FILE,'rb',check_sq=False)
@@ -73,39 +73,44 @@ class DetectHighIPD:
             if (prev_zm != zm) & (prev_zm != 0):
                 if FOLDER_PATH != "":
                     np.savetxt("{}/zm{}_ipdmatrix.txt".format(FOLDER_PATH,zm),ipd_matrix[:pass_count,:max_pos+1],fmt='%d')
-                    ipd_mat_list[mat_count] = ipd_matrix[:pass_count,:max_pos+1]
-                    mat_count += 1
-                    zm_list.append(prev_zm)
+                ipd_mat_list[mat_count] = ipd_matrix[:pass_count,:max_pos+1]
+                mat_count += 1
+                zm_list.append(prev_zm)
                 if mat_count >= 100:
                     self.run_detect(ipd_mat_list,mat_count,zm_list)
                     mat_count = 0
                     zm_list = []
-                    ipd_matrix = np.zeros((self.MAX_PASS,self.MAX_READ_LEN))
-                    max_pos = 0
-                    pass_count = 0
-                    prev_zm = zm
-                    aligned_pairs = np.array(read.get_aligned_pairs(matches_only=True),dtype=int)#list of tuples whose elements are (read_pos, ref_pos) for matched bases
-                    raw_ipd = np.array(read.get_tag('ip'),dtype=int)
+                ipd_matrix = np.zeros((self.MAX_PASS,self.MAX_READ_LEN))
+                max_pos = 0
+                pass_count = 0
+            prev_zm = zm
+            aligned_pairs = np.array(read.get_aligned_pairs(matches_only=True),dtype=int)#list of tuples whose elements are (read_pos, ref_pos) for matched bases
+            raw_ipd = np.array(read.get_tag('ip'),dtype=int)
             for i in range(len(aligned_pairs)):
                 read_pos = aligned_pairs[i,0]
                 ref_pos = aligned_pairs[i,1]
                 ipd_matrix[pass_count,ref_pos] = raw_ipd[read_pos]
-                pass_count += 1
+            pass_count += 1
             max_pos_subread = np.max(aligned_pairs[:,1])
             if max_pos < max_pos_subread:
                 max_pos = max_pos_subread
         if FOLDER_PATH != "":
             np.savetxt("{}/zm{}_ipdmatrix.txt".format(FOLDER_PATH,zm),ipd_matrix,fmt='%d')
-            ipd_mat_list.append(ipd_matrix[:pass_count,:max_pos+1].copy())
-            mat_count += 1
-            zm_list.append(prev_zm)
-            self.run_detect(ipd_mat_list,mat_count,zm_list)
-            bamfile.close()
+        ipd_mat_list.append(ipd_matrix[:pass_count,:max_pos+1].copy())
+        mat_count += 1
+        zm_list.append(prev_zm)
+        self.run_detect(ipd_mat_list,mat_count,zm_list)
+        bamfile.close()
         return
 
 
 
 if __name__ == "__main__":
-    ALIGNED_FILE,RESULT_PATH,MAX_READ_LEN,MAX_PASS,prob,alpha=input().split()
-    dhipd = DetectHighIPD(ALIGNED_FILE,RESULT_PATH,MAX_READ_LEN,MAX_PASS,prob,alpha)
+    ALIGNED_FILE=input()
+    RESULT_PATH=input()
+    MAX_READ_LEN=input()
+    MAX_PASS=input()
+    prob=input()
+    alpha=input()
+    dhipd = DetectHighIPD(ALIGNED_FILE,RESULT_PATH,int(MAX_READ_LEN),int(MAX_PASS),float(prob),float(alpha))
     dhipd.align_by_read()
