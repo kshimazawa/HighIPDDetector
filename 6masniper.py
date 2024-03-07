@@ -3,50 +3,33 @@ import pysam
 from concurrent.futures import ProcessPoolExecutor
 
 class DetectHighIPD:
-    def __init__(self,ALIGNED_FILE,RESULT_PATH,MAX_READ_LEN,MAX_PASS,prob,alpha):
+    def __init__(self,ALIGNED_FILE,RESULT_PATH,MAX_READ_LEN,MAX_PASS):
         self.ALIGNED_FILE = ALIGNED_FILE
         self.RESULT_PATH = RESULT_PATH
         self.MAX_READ_LEN = MAX_READ_LEN
         self.MAX_PASS = MAX_PASS
-        self.prob = prob
-        self.alpha = alpha
-    #detect consistently high IPD based on the binominal statistical testing
-    def combination(self,n,k):
-        if (n <= 0) | (k < 0) | (n < k):
-            exit(1)
-        elif k == 0:
-            return 1
-        else:
-            ans = 1
-            for i in range(k):
-                ans *= n-i
-                ans /=(i + 1)
-        return ans
 
-    def detect(self,ipd_mat,min_passes=10):
+    def detect(self,ipd_mat,min_passes=5):
         detected = []
         if (ipd_mat.shape[0] < min_passes) | (ipd_mat.ndim == 1):
             return [-1]
-        ipd_nonzero = ipd_mat>0
-        th_ipd = np.percentile(ipd_mat[ipd_nonzero],(1-self.prob)*100)
-        # rank_array = np.zeros(ipd_mat.shape)
-        # for j in range(rank_array.shape[0]):
-        #     rank_array[j] = np.argsort(np.argsort(ipd_mat[j]))
-
-        for pos in range(ipd_mat.shape[1]):
-            passes = np.sum(ipd_nonzero[:,pos])
-            cnt = np.sum(ipd_mat[:,pos] > th_ipd)
-            pval = 0
-            comb = 1
-            if cnt != 0:
-                comb = self.combination(passes,cnt-1)
-            for i in range(cnt,passes+1):
-                if i == 0:
-                    pval += comb*(self.prob**i)*((1-self.prob)**(passes-i))
-                else:
-                    pval += comb*(passes-i+1)/i*(self.prob**i)*((1-self.prob)**(passes-i))
-            if pval < self.alpha/ipd_mat.shape[1]:
-                detected.append(pos)
+        n_ipd = np.zeros(ipd_mat.shape)
+        #num_match = np.zeros(ipd_mat.shape[0])
+        for j in range(n_ipd.shape[0]):
+            for pos in range(n_ipd.shape[1]):
+                if (ipd_mat[j,pos] == 0) | (ipd_mat[j,pos-1] == 0) | (pos == 0):
+                    continue
+                n_ipd[j,pos] = ipd_mat[j,pos]*2/(ipd_mat[j,pos]+ipd_mat[j,pos-1])
+        for pos in range(n_ipd.shape[1]):
+            if pos == 0:
+                detected.append(0)
+                continue
+            n_ipd_nonzero = n_ipd[:,pos].copy()
+            n_ipd_nonzero = n_ipd_nonzero[n_ipd_nonzero>0]
+            if len(n_ipd_nonzero) == 0:
+                detected.append(0)
+            else:
+                detected.append(np.median(n_ipd_nonzero))
         return detected
 
     def run_detect(self,ipd_mat_list,mat_count,zm_list):
@@ -114,7 +97,5 @@ if __name__ == "__main__":
     RESULT_PATH=input()
     MAX_READ_LEN=input()
     MAX_PASS=input()
-    prob=input()
-    alpha=input()
-    dhipd = DetectHighIPD(ALIGNED_FILE,RESULT_PATH,int(MAX_READ_LEN),int(MAX_PASS),float(prob),float(alpha))
+    dhipd = DetectHighIPD(ALIGNED_FILE,RESULT_PATH,int(MAX_READ_LEN),int(MAX_PASS))
     dhipd.align_by_read()
