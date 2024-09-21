@@ -1,6 +1,9 @@
 import numpy as np
 import pysam
+import math
 from concurrent.futures import ProcessPoolExecutor
+import hpss
+
 
 class DetectHighIPD:
     def __init__(self,ALIGNED_FILE,RESULT_PATH,MAX_READ_LEN,MAX_PASS,prob,alpha):
@@ -11,43 +14,32 @@ class DetectHighIPD:
         self.prob = prob
         self.alpha = alpha
     #detect consistently high IPD based on the binominal statistical testing
-    def combination(self,n,k):
-        if (n <= 0) | (k < 0) | (n < k):
-            exit(1)
-        elif k == 0:
-            return 1
-        else:
-            ans = 1
-            for i in range(k):
-                ans *= n-i
-                ans /=(i + 1)
-        return ans
-
+    
     def detect(self,ipd_mat,min_passes=10):
         detected = []
         if (ipd_mat.shape[0] < min_passes) | (ipd_mat.ndim == 1):
             return [-1]
-        rank_array = np.zeros(ipd_mat.shape)
-        for j in range(rank_array.shape[0]):
-            rank_array[j] = np.argsort(np.argsort(ipd_mat[j]))
+        ipd_mat = hpss.hpss(Y=ipd_mat)#separation
+        ipd_nonzero = ipd_mat>0
+        th_ipd = np.percentile(ipd_mat[ipd_nonzero],(1-self.prob)*100)
 
-        passes = rank_array.shape[0]
-        for pos in range(rank_array.shape[1]):
-            cnt = np.sum(rank_array[:,pos] > (rank_array.shape[1]*(1-self.prob)))
+        for pos in range(ipd_mat.shape[1]):
+            passes = np.sum(ipd_nonzero[:,pos])
+            cnt = np.sum(ipd_mat[:,pos] > th_ipd)
             pval = 0
             comb = 1
             if cnt != 0:
-                comb = self.combination(passes,cnt-1)
+                comb = math.comb(passes,cnt-1)
             for i in range(cnt,passes+1):
                 if i == 0:
                     pval += comb*(self.prob**i)*((1-self.prob)**(passes-i))
                 else:
                     pval += comb*(passes-i+1)/i*(self.prob**i)*((1-self.prob)**(passes-i))
-            if pval < self.alpha/rank_array.shape[1]:
+            if pval < self.alpha/ipd_mat.shape[1]:
                 detected.append(pos)
         return detected
 
-    def run_detect(self,ipd_mat_list,mat_count,zm_list):
+    def parallel_detect(self,ipd_mat_list,mat_count,zm_list):
         result_dict = {}
         result = []
         with ProcessPoolExecutor() as executor:
@@ -57,7 +49,6 @@ class DetectHighIPD:
         with open(self.RESULT_PATH,"a") as f:
             for k in result_dict:
                 f.write("{}\t{}\n".format(k,result_dict[k]))
-        print("until zm{} done".format(zm_list[-1]))
 
     def align_by_read(self,FOLDER_PATH=""):
         bamfile = pysam.AlignmentFile(self.ALIGNED_FILE,'rb',check_sq=False)
@@ -77,7 +68,7 @@ class DetectHighIPD:
                 mat_count += 1
                 zm_list.append(prev_zm)
                 if mat_count >= 100:
-                    self.run_detect(ipd_mat_list,mat_count,zm_list)
+                    self.parallel_detect(ipd_mat_list,mat_count,zm_list)
                     mat_count = 0
                     zm_list = []
                 ipd_matrix = np.zeros((self.MAX_PASS,self.MAX_READ_LEN))
@@ -86,6 +77,8 @@ class DetectHighIPD:
             prev_zm = zm
             aligned_pairs = np.array(read.get_aligned_pairs(matches_only=True),dtype=int)#list of tuples whose elements are (read_pos, ref_pos) for matched bases
             raw_ipd = np.array(read.get_tag('ip'),dtype=int)
+            if "reverse" in self.ALIGNED_FILE:
+                raw_ipd = np.flip(raw_ipd)
             for i in range(len(aligned_pairs)):
                 read_pos = aligned_pairs[i,0]
                 ref_pos = aligned_pairs[i,1]
@@ -99,7 +92,7 @@ class DetectHighIPD:
         ipd_mat_list.append(ipd_matrix[:pass_count,:max_pos+1].copy())
         mat_count += 1
         zm_list.append(prev_zm)
-        self.run_detect(ipd_mat_list,mat_count,zm_list)
+        self.parallel_detect(ipd_mat_list,mat_count,zm_list)
         bamfile.close()
         return
 

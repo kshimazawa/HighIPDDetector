@@ -10,10 +10,14 @@ def align_by_read(ALIGNED_FILE,FOLDER_PATH):
     max_pos = 0
     ipd_matrix = np.zeros((MAX_PASS,MAX_READ_LEN))
     pass_count = 0
+    count = 0
     for read in bamfile.fetch(until_eof=True):
         zm = int(read.get_tag('zm'))
         if (prev_zm != zm) & (prev_zm != 0):
             np.savetxt("{}/zm{}_ipdmatrix.txt".format(FOLDER_PATH,zm),ipd_matrix[:pass_count,:max_pos+1],fmt='%d')
+            count += 1
+            if count >= 1000:
+                return
             ipd_matrix = np.zeros((MAX_PASS,MAX_READ_LEN))
             min_pos = 0
             max_pos = 0
@@ -37,4 +41,6 @@ def align_by_read(ALIGNED_FILE,FOLDER_PATH):
     bamfile.close()
         
 if __name__ == "__main__":
-    ALIGNED_FILE = ""
+    ALIGNED_FILE = input()
+    FOLDER_PATH = input()
+    align_by_read(ALIGNED_FILE,FOLDER_PATH)

@@ -1,5 +1,6 @@
+
 import re
-FILE = "/work/00/gg57/share/genomes/ce11rel606/ce11rel606.fa"
+FILE ='/home/yoshihiko_s/work/ccs_ipd/static/ce11rel606/ce11rel606.fa'
 #MOTIF = '[gG][gG][ACGTacgt][gG][gG][ACGTacgt][gG][gG][ACGTacgt][gG][gG][ACGTacgt]'
 #MOTIF = '[AGCTagct][Cc][Cc][ACGTacgt][Cc][cC][ACGTacgt][Cc][Cc][ACTGacgt][Cc][Cc]'
 #MOTIF = '[Aa][Tt][Cc][Aa][Gg][Cc][Tt][Gg]'
@@ -8,7 +9,8 @@ FILE = "/work/00/gg57/share/genomes/ce11rel606/ce11rel606.fa"
 #MOTIF = '[Aa][Tt][Aa][Tt][Aa][Tt][Aa][Tt][Aa][Tt][Aa][Tt][Aa][Tt][Aa][Tt][Aa][Tt][Aa][Tt]'
 #MOTIF = '[Aa][Gg]'
 #MOTIF = '[AT][TA][AT][TA][AG][TA][AT][GTA]GTATA[AT][GCTA][TACG][TA][TA]'
-MOTIF = '[TA][AT][AGC][TAC]TG[TC]TCA[GT][ACT]C[AG][TA][TCA]'
+#MOTIF = '[TA][AT][AGC][TAC]TG[TC]TCA[GT][ACT]C[AG][TA][TCA]'
+MOTIF = '[Gg][Gg][Aa][Gg]'
 def find_motif(fname = FILE,motif = MOTIF):
     pos = {}
     is_first = True

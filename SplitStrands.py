@@ -1,5 +1,6 @@
 import pysam
 import numpy as np
+import sys
 #make an ipd matrix
 def split_strands(ALIGNED_FILE,NEW_FILE):
     bamfile = pysam.AlignmentFile(ALIGNED_FILE,'rb',check_sq=False)
@@ -14,3 +15,6 @@ def split_strands(ALIGNED_FILE,NEW_FILE):
     reverse_bamfile.close()
     bamfile.close()
         
+if __name__ == "__main__":
+    split_strands("{}.subreads.actc.bam".format(sys.argv[1]),"{}.subreads.actc".format(sys.argv[1]))
+    
